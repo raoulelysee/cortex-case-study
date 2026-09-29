@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cortex Case Study</title>
+<meta name="description" content="Privacy-first personal AI security assistant on LangGraph — architecture, key technical decisions, and results.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F6F8; --surface:#FFFFFF; --surface-2:#EEF0F3;
+  --text:#12161C; --text-dim:#565F6B; --border:#DBE0E6;
+  --accent:#1657D6; --accent-soft:#E7EEFC;
+  --signal:#B4600A; --signal-soft:#FBECDA;
+  --mono-bg:#0E141B; --mono-text:#D9E2EC; --mono-dim:#7C8B9C;
+  --ok:#146C3E; --ok-soft:#E4F4EB;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0B0F14; --surface:#121821; --surface-2:#182130;
+    --text:#E7ECF2; --text-dim:#96A3B3; --border:#26313F;
+    --accent:#5B8DEF; --accent-soft:#16233B;
+    --signal:#E8A34D; --signal-soft:#2E2415;
+    --mono-bg:#05080B; --mono-text:#D9E2EC; --mono-dim:#6B7787;
+    --ok:#4FD78E; --ok-soft:#12271C;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{
+  color:var(--text); margin:0;
+  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  padding-inline:16px; line-height:1.55;
+}
+.wrap{max-width:840px;margin:0 auto;padding-block:48px 80px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 10px;
+  display:flex; align-items:center; gap:8px;
+}
+.eyebrow::before{content:"//"; color:var(--text-dim)}
+h1{
+  font-family:"IBM Plex Mono",monospace; font-size:clamp(28px,5vw,40px);
+  margin:0 0 6px; letter-spacing:-.01em; text-wrap:balance;
+}
+.tagline{color:var(--text-dim); font-size:17px; margin:0 0 22px; max-width:60ch}
+h2{
+  font-family:"IBM Plex Mono",monospace; font-size:14px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--text-dim); margin:56px 0 18px;
+  padding-bottom:10px; border-bottom:1px solid var(--border);
+}
+p{margin:0 0 14px; max-width:68ch}
+.termline{
+  font-family:"IBM Plex Mono",monospace; font-size:13px; background:var(--mono-bg);
+  color:var(--mono-text); border-radius:8px; padding:14px 18px; display:inline-block;
+  margin-top:6px;
+}
+.termline .p{color:var(--mono-dim)}
+.termline .ok{color:var(--ok)}
+.badgerow{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+.badge{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; border:1px solid var(--border);
+  background:var(--surface); padding:5px 10px; border-radius:6px; color:var(--text-dim);
+}
+figure{margin:0}
+figcaption{
+  font-size:13px; color:var(--text-dim); margin-top:12px; max-width:68ch;
+}
+svg text{fill:currentColor}
+.svgwrap{
+  border:1px solid var(--border); background:var(--surface); border-radius:12px;
+  padding:20px 12px; overflow-x:auto;
+}
+.accentline{stroke:var(--accent)}
+.accentfill{fill:var(--accent)}
+.dimline{stroke:var(--text-dim); opacity:.55}
+
+.decisions{display:flex; flex-direction:column; gap:22px}
+.decision{
+  border:1px solid var(--border); background:var(--surface); border-radius:10px;
+  padding:20px 22px;
+}
+.decision .num{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--accent);
+  margin-bottom:6px;
+}
+.decision h3{font-size:17px; margin:0 0 8px}
+.decision p{margin:0; color:var(--text-dim); font-size:15px}
+.decision p strong{color:var(--text); font-weight:600}
+
+.codecard{
+  background:var(--mono-bg); border-radius:10px; overflow:hidden; margin:16px 0 6px;
+  border:1px solid var(--border);
+}
+.codebar{
+  display:flex; align-items:center; gap:8px; padding:10px 14px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.dot{width:9px;height:9px;border-radius:50%}
+.d1{background:#E4626F}.d2{background:#E8B94D}.d3{background:#57C785}
+.codebar .fname{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--mono-dim); margin-left:6px;
+}
+pre{
+  margin:0; padding:16px 18px; overflow-x:auto; font-family:"IBM Plex Mono",monospace;
+  font-size:12.5px; line-height:1.6; color:var(--mono-text);
+}
+.c-kw{color:#8AB4F8}.c-str{color:#F5C97B}.c-com{color:var(--mono-dim)}.c-fn{color:#7ED6A5}
+
+table{width:100%; border-collapse:collapse; margin-top:8px; font-size:14px}
+th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--border)}
+th{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--text-dim); font-weight:600;
+}
+.pill{
+  display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11px;
+  padding:3px 8px; border-radius:5px; background:var(--ok-soft); color:var(--ok);
+}
+.pill.warn{background:var(--signal-soft); color:var(--signal)}
+
+.footer{
+  margin-top:64px; padding-top:22px; border-top:1px solid var(--border);
+  color:var(--text-dim); font-size:13px;
+}
+
+.shots{display:flex; flex-direction:column; gap:28px}
+.shot{
+  border:1px solid var(--border); border-radius:12px; overflow:hidden;
+  background:var(--surface);
+}
+.shot img{display:block; width:100%; height:auto}
+.shot figcaption{padding:14px 18px; margin:0; border-top:1px solid var(--border)}
+@media (max-width:480px){.wrap{padding-block:32px 60px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Case study</div>
+  <h1>Cortex</h1>
+  <p class="tagline">A privacy-first personal AI security assistant built on LangGraph. It combines a multi-provider agent core with real offensive-security tooling and a self-red-teaming discipline, all running locally under the operator's own control.</p>
+  <div class="termline">
+    <span class="p">cortex&gt;</span> status<br>
+    <span class="ok">OK</span>: LangGraph engine · multi-provider router · MCP-exposed · 3586 tests passing
+  </div>
+  <div class="badgerow">
+    <span class="badge">Python 3.12 / LangGraph</span>
+    <span class="badge">FastAPI + React</span>
+    <span class="badge">Multi-provider LLM routing</span>
+    <span class="badge">MCP server</span>
+    <span class="badge">80+ skills</span>
+  </div>
+
+  <h2>Problem &amp; context</h2>
+  <p>Most personal AI assistants are thin chat wrappers around a single hosted model: no persistent reasoning loop, no real tooling, and no way to verify the assistant's own claims. Security practitioners have the opposite problem: plenty of point tools (scanners, fuzzers, jailbreak corpora) but no single agent that can plan a task, run the right tool for it, and hold itself to evidence rather than prose.</p>
+  <p>Cortex is a personal-infrastructure answer to both: a LangGraph-driven agent that treats every task as a graph of typed states rather than a single prompt, routes across whichever LLM provider is actually available (cloud or fully local via Ollama), and ships with genuine security-testing skills. Network and web pentesting, OWASP ZAP and Burp Suite integration, and a growing set of AI red-teaming capabilities that test the assistant's <em>own</em> resistance to attack, not just third-party targets.</p>
+
+  <h2>Architecture</h2>
+  <figure class="svgwrap">
+    <svg viewBox="0 0 760 300" role="img" aria-label="A request enters through the CLI, the web console, or an external MCP client, and is handled by a LangGraph state graph that observes, plans, acts through a skill, and completes; the skill calls a multi-provider model router with an automatic fallback chain, and offensive skills additionally pass through a scope guard before touching a target.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <g class="mono" font-family="IBM Plex Mono, monospace" font-size="11.5">
+        <rect x="20" y="20" width="120" height="36" rx="7" fill="none" stroke="currentColor" opacity=".7"/>
+        <text x="80" y="43" text-anchor="middle">CLI / REPL</text>
+
+        <rect x="20" y="70" width="120" height="36" rx="7" fill="none" stroke="currentColor" opacity=".7"/>
+        <text x="80" y="93" text-anchor="middle">Web console</text>
+
+        <rect x="20" y="120" width="120" height="36" rx="7" fill="none" stroke="currentColor" opacity=".7"/>
+        <text x="80" y="143" text-anchor="middle">MCP client</text>
+        <text x="80" y="157" text-anchor="middle" font-size="9.5" fill="currentColor" opacity=".55">(Claude Code, etc.)</text>
+      </g>
+
+      <line x1="140" y1="38" x2="215" y2="88" class="dimline" marker-end="url(#arrow)"/>
+      <line x1="140" y1="88" x2="215" y2="88" class="dimline" marker-end="url(#arrow)"/>
+      <line x1="140" y1="138" x2="215" y2="88" class="dimline" marker-end="url(#arrow)"/>
+
+      <rect x="220" y="50" width="190" height="76" rx="9" class="accentline" fill="none" stroke-width="1.6"/>
+      <text x="315" y="80" text-anchor="middle" class="mono accentfill" font-family="IBM Plex Mono, monospace" font-size="12.5" font-weight="600">LangGraph engine</text>
+      <text x="315" y="100" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="10.5" opacity=".7">OBSERVE → PLAN → ACT</text>
+      <text x="315" y="114" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="10.5" opacity=".7">→ EVALUATE → COMPLETE</text>
+
+      <line x1="410" y1="88" x2="470" y2="88" class="dimline" marker-end="url(#arrow)"/>
+      <text x="440" y="80" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".6">dispatches</text>
+
+      <rect x="475" y="50" width="150" height="76" rx="9" fill="none" stroke="currentColor" opacity=".7"/>
+      <text x="550" y="80" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="12">Skill registry</text>
+      <text x="550" y="98" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="10" opacity=".6">80+ skills, availability-</text>
+      <text x="550" y="111" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="10" opacity=".6">gated per machine</text>
+
+      <line x1="315" y1="126" x2="315" y2="190" class="dimline" marker-end="url(#arrow)"/>
+      <text x="335" y="160" class="mono" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".6">reasons via</text>
+      <rect x="220" y="192" width="190" height="60" rx="9" fill="none" stroke="currentColor" opacity=".7"/>
+      <text x="315" y="216" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="12">Model router</text>
+      <text x="315" y="234" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="10" opacity=".6">Anthropic → Groq → OpenAI</text>
+      <text x="315" y="246" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="10" opacity=".6">→ Mistral → local Ollama</text>
+
+      <line x1="550" y1="126" x2="550" y2="190" class="dimline" marker-end="url(#arrow)"/>
+      <text x="574" y="160" class="mono" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".6">active skills</text>
+      <text x="574" y="172" class="mono" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".6">only, via</text>
+      <rect x="475" y="192" width="150" height="60" rx="9" class="accentline" fill="none" stroke-width="1.6"/>
+      <text x="550" y="216" text-anchor="middle" class="mono accentfill" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600">Scope guard</text>
+      <text x="550" y="234" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="10" opacity=".6">fail-closed once an</text>
+      <text x="550" y="246" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="10" opacity=".6">engagement is loaded</text>
+
+      <line x1="550" y1="252" x2="550" y2="280" class="dimline" marker-end="url(#arrow)"/>
+      <text x="550" y="296" text-anchor="middle" class="mono" font-family="IBM Plex Mono, monospace" font-size="11">authorized target</text>
+    </svg>
+    <figcaption>Every entry surface (terminal, web console, or an external MCP-aware agent) is handled by the same LangGraph state machine. Reasoning routes through a fallback chain of model providers; any skill that touches a live target routes through a scope guard that fails closed once an engagement is loaded.</figcaption>
+  </figure>
+
+  <h2>The console</h2>
+  <p>The operator console (FastAPI + React) is where a session actually runs: launch a skill, watch it execute, read the evidence-backed report it produces.</p>
+  <div class="shots">
+    <figure class="shot">
+      <img src="ui-chats.png" alt="Cortex operator console home screen, dark theme, showing quick-start commands for pentest, llm_probe and threat_model">
+      <figcaption>Home screen. Quick-start commands for the most common skills; every session is logged and resumable.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="ui-skills.png" alt="Cortex skills catalog panel, listing available skills with posture tags such as passive, active, consent and LLM">
+      <figcaption>Skills catalog. Each entry is tagged by posture (passive, active, consent-required, LLM-backed) and grayed out automatically when its external dependency isn't available on the machine.</figcaption>
+    </figure>
+  </div>
+
+  <h2>Non-obvious technical decisions</h2>
+  <div class="decisions">
+
+    <div class="decision">
+      <div class="num">01</div>
+      <h3>Per-provider token clamping, not a single global budget</h3>
+      <p>A naive multi-provider router forwards one <code>max_tokens</code> value down its entire fallback chain. That value is usually sized for the primary model, and above a smaller fallback model's real completion ceiling, most providers return a hard error instead of degrading gracefully. Cortex's router clamps the requested budget <strong>per model, per attempt</strong>, so a fallback from a large hosted model to a small local one degrades instead of failing outright. Callers that need to report the enforced budget back to a user re-derive it from the model that actually answered, not the number they originally asked for.</p>
+    </div>
+
+    <div class="decision">
+      <div class="num">02</div>
+      <h3>Mechanical evidence over an LLM judge, for self-red-teaming</h3>
+      <p>The obvious way to grade "did the model resist this jailbreak attempt" is to ask another LLM to judge the transcript. Cortex's jailbreak self-evaluation skill deliberately avoids that: a judge grading the same family of model it's evaluating inherits that model's own blind spots. Instead, each test vector plants a distinctive marker or a canary secret inside a real, deployed system prompt, and a hit is decided by whether that exact token comes back. Refusals that merely <em>quote</em> the marker are explicitly excluded from counting as compliance. The tradeoff is an honest one: a model that jailbreaks in its own words without the literal token is a false negative, and that limitation is documented rather than hidden.</p>
+    </div>
+
+    <div class="decision">
+      <div class="num">03</div>
+      <h3>Propose vs. auto-execute, with separate budgets, in the finding-chain orchestrator</h3>
+      <p>Chaining "recon finds X → exploit X → report" automatically is the difference between a scanner and an agent, and between a bounded tool and a runaway one. Cortex's orchestrator plans the next hop from every real finding, re-validates authorization scope at each step, and only <em>auto-fires</em> a hop when it's low-risk and credential-free (a same-host web probe); anything that needs stored credentials or a heavier toolchain stays a proposed, human-reviewed next step. The auto-executing path also draws from a <strong>smaller, separate</strong> hop budget than the planning pass, so proposed hops can never quietly crowd out the cap meant to bound real, active calls.</p>
+    </div>
+
+  </div>
+
+  <h2>Code, as written</h2>
+  <p>Short excerpts only, enough to show how the codebase actually reasons about failure and trust boundaries, not enough to reconstruct it.</p>
+
+  <div class="codecard">
+    <div class="codebar"><span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span><span class="fname">scope check: fails closed on its own error</span></div>
+    <pre><span class="c-com"># a scope decision that can't be evaluated is treated as a denial,</span>
+<span class="c-com"># never silently allowed through</span>
+<span class="c-kw">try</span>:
+    decision = scope_guard.check_target(host)
+<span class="c-kw">except</span> Exception <span class="c-kw">as</span> exc:
+    logger.error(<span class="c-str">"scope check failed for %r -- denying by default: %s"</span>, host, exc)
+    <span class="c-kw">return</span> <span class="c-str">f"ScopeGuard verification failed for `{host}`, access denied."</span>
+
+<span class="c-kw">if</span> decision.denied:
+    <span class="c-kw">return</span> <span class="c-str">f"ScopeGuard blocks `{host}`: {decision.reason}"</span></pre>
+  </div>
+
+  <div class="codecard">
+    <div class="codebar"><span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span><span class="fname">MCP surface: a stricter default than the CLI, on purpose</span></div>
+    <pre><span class="c-kw">def</span> <span class="c-fn">active_skill_refused_over_mcp</span>(skill_name: <span class="c-kw">str</span>) -&gt; <span class="c-kw">str</span> | <span class="c-kw">None</span>:
+    <span class="c-com">"""CLI/REPL/web keep ScopeGuard's normal default; an external</span>
+<span class="c-com">    MCP agent gets a stricter one -- no active engagement, no run."""</span>
+    <span class="c-kw">if</span> is_consent_gated(skill_name) <span class="c-kw">and not</span> scope_guard.is_active:
+        <span class="c-kw">return</span> (
+            <span class="c-str">f"'{skill_name}' is an active skill and this call arrived over "</span>
+            <span class="c-str">"MCP with no engagement scope loaded."</span>
+        )
+    <span class="c-kw">return None</span></pre>
+  </div>
+
+  <h2>Results</h2>
+  <p>Every feature shipped through the same pipeline: implement, get an independent review from two separate frontier models, fix what they find, re-verify, then merge. That discipline has caught real defects before they reached the working tree, not style nits.</p>
+  <table>
+    <tr><th>Check</th><th>Outcome</th></tr>
+    <tr><td>Test suite</td><td><span class="pill">3586 passing</span></td></tr>
+    <tr><td>Dual-model review: MCP interoperability layer</td><td><span class="pill warn">defect found &amp; fixed pre-merge</span></td></tr>
+    <tr><td>Dual-model review: recon→exploit→report orchestrator</td><td><span class="pill warn">defect found &amp; fixed pre-merge</span></td></tr>
+    <tr><td>Regression scope</td><td><span class="pill">zero regressions across all merges</span></td></tr>
+  </table>
+  <p style="margin-top:18px">One review pass caught something outside its own diff entirely: a pre-existing scope-check bug in an unrelated module that had been silently failing open, surfaced only because a new feature made it reachable from further away. It was fixed in the same change, with a regression test added directly against the original defect.</p>
+
+  <div class="footer">
+    Private repository. Architecture and methodology shown here; full source available on request.
+  </div>
+
+</div>
+</body>
+</html>
