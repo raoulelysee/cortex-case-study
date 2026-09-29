@@ -159,7 +159,7 @@ th{
 
   <h2>Problem &amp; context</h2>
   <p>Most personal AI assistants are thin chat wrappers around a single hosted model: no persistent reasoning loop, no real tooling, and no way to verify the assistant's own claims. Security practitioners have the opposite problem: plenty of point tools (scanners, fuzzers, jailbreak corpora) but no single agent that can plan a task, run the right tool for it, and hold itself to evidence rather than prose.</p>
-  <p>Cortex is a personal-infrastructure answer to both: a LangGraph-driven agent that treats every task as a graph of typed states rather than a single prompt, routes across whichever LLM provider is actually available (cloud or fully local via Ollama), and ships with genuine security-testing skills. Network and web pentesting, OWASP ZAP and Burp Suite integration, and a growing set of AI red-teaming capabilities that test the assistant's <em>own</em> resistance to attack, not just third-party targets.</p>
+  <p>Cortex is a personal-infrastructure answer to both: a LangGraph-driven agent that treats every task as a graph of typed states rather than a single prompt, routes across whichever LLM provider is actually available (cloud or fully local via Ollama), and ships with genuine security-testing skills: a network and web pentest toolchain (nmap, nikto, testssl.sh, subfinder, httpx and nuclei, each run as a Docker container), OWASP ZAP and Burp Suite Pro integration over their own REST APIs, and a growing set of AI red-teaming capabilities that test the assistant's <em>own</em> resistance to attack, not just third-party targets.</p>
 
   <h2>Architecture</h2>
   <figure class="svgwrap">
@@ -219,6 +219,7 @@ th{
     </svg>
     <figcaption>Every entry surface (terminal, web console, or an external MCP-aware agent) is handled by the same LangGraph state machine. Reasoning routes through a fallback chain of model providers; any skill that touches a live target routes through a scope guard that fails closed once an engagement is loaded.</figcaption>
   </figure>
+  <p style="margin-top:18px">This loop isn't security-specific. OBSERVE → PLAN → ACT → EVALUATE → COMPLETE is the one reasoning engine every skill runs through, security and non-security alike, from a network scan to a plain TELOS goal update. Reusing a single engine instead of writing ad hoc logic for each new feature is the real architectural bet behind the project.</p>
 
   <h2>The console</h2>
   <p>The operator console (FastAPI + React) is where a session actually runs: launch a skill, watch it execute, read the evidence-backed report it produces.</p>
